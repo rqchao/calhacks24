@@ -22,7 +22,6 @@ def show_customer(user: Customer):
         )),
         rx.table.cell(
             rx.hstack(
-                update_customer_dialog(user),
                 rx.icon_button(
                     rx.icon("trash-2", size=22),
                     on_click=lambda: State.delete_customer(getattr(user, "id")),
@@ -37,7 +36,7 @@ def show_customer(user: Customer):
     )
 
 
-def add_customer_button() -> rx.Component:
+def add_document_button() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.trigger(
             rx.button(
@@ -167,147 +166,78 @@ def add_customer_button() -> rx.Component:
     )
 
 
-def update_customer_dialog(user):
-    return rx.dialog.root(
-        rx.dialog.trigger(
-            rx.button(
-                rx.icon("square-pen", size=22),
-                rx.text("Edit", size="3"),
-                color_scheme="blue",
-                size="2",
-                variant="solid",
-                on_click=lambda: State.get_user(user),
-            ),
-        ),
-        rx.dialog.content(
-            rx.hstack(
-                rx.badge(
-                    rx.icon(tag="square-pen", size=34),
-                    color_scheme="green",
-                    radius="full",
-                    padding="0.65rem",
+def document_display_box():
+    return rx.box(
+        rx.scroll_area(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("square-pen", size=34),
+                    rx.vstack(
+                        rx.heading("Document Content", size="lg"),
+                        rx.text("Viewing and editing document"),
+                        align_items="start",
+                    ),
+                    width="100%",
+                    spacing="4",
+                    padding_bottom="4",
                 ),
-                rx.vstack(
-                    rx.dialog.title(
-                        "Edit Customer",
-                        weight="bold",
-                        margin="0",
-                    ),
-                    rx.dialog.description(
-                        "Edit the customer's info",
-                    ),
-                    spacing="1",
-                    height="100%",
-                    align_items="start",
-                ),
-                height="100%",
-                spacing="4",
-                margin_bottom="1.5em",
-                align_items="center",
-                width="100%",
-            ),
-            rx.flex(
-                rx.form.root(
-                    rx.flex(
-                        # Name
-                        form_field(
-                            "Name",
-                            "Customer Name",
-                            "text",
-                            "name",
-                            "user",
-                            user.name,
-                        ),
-                        # Email
-                        form_field(
-                            "Email",
-                            "user@reflex.dev",
-                            "email",
-                            "email",
-                            "mail",
-                            user.email,
-                        ),
-                        # Phone
-                        form_field(
-                            "Phone",
-                            "Customer Phone",
-                            "tel",
-                            "phone",
-                            "phone",
-                            user.phone,
-                        ),
-                        # Address
-                        form_field(
-                            "Address",
-                            "Customer Address",
-                            "text",
-                            "address",
-                            "home",
-                            user.address,
-                        ),
-                        # Payments
-                        form_field(
-                            "Payment ($)",
-                            "Customer Payment",
-                            "number",
-                            "payments",
-                            "dollar-sign",
-                            user.payments.to(str)
-                        ),
-                        # Status
-                        rx.vstack(
-                            rx.hstack(
-                                rx.icon("truck", size=16, stroke_width=1.5),
-                                rx.text("Status"),
-                                align="center",
-                                spacing="2",
+                rx.divider(),
+                rx.box(
+                    rx.cond(
+                        State.is_streaming,
+                        rx.hstack(
+                            rx.image(
+                                src="llama.svg",
+                                height="1.5em",
+                                class_name="animate-pulse",
                             ),
-                            rx.radio(
-                                ["Delivered", "Pending", "Cancelled"],
-                                default_value=user.status,
-                                name="status",
-                                direction="row",
-                                as_child=True,
-                                required=True,
-                            ),
+                            rx.text("Streaming..."),
+                            spacing="2",
                         ),
-                        direction="column",
-                        spacing="3",
+                        rx.text(""),
                     ),
-                    rx.flex(
-                        rx.dialog.close(
+                    rx.box(
+                        rx.markdown(
+                            State.document_content,
+                            color="black",
+                        ),
+                        rx.box(
                             rx.button(
-                                "Cancel",
-                                variant="soft",
-                                color_scheme="gray",
+                                rx.icon(tag="copy", size=18),
+                                on_click=[rx.set_clipboard(State.document_content), rx.toast("Copied!")],
+                                title="Copy",
+                                variant="ghost",
+                                size="sm",
                             ),
+                            position="absolute",
+                            bottom="4",
+                            right="4",
+                            opacity="0",
+                            _group_hover={"opacity": "1"},
+                            transition="opacity 0.3s",
                         ),
-                        rx.form.submit(
-                            rx.dialog.close(
-                                rx.button("Update Customer"),
-                            ),
-                            as_child=True,
-                        ),
-                        padding_top="2em",
-                        spacing="3",
-                        mt="4",
-                        justify="end",
+                        background_color="#FFFBEB",
+                        margin_bottom="1.5rem",
+                        padding="1.5rem",
+                        border_radius="0.5rem",
                     ),
-                    on_submit=State.update_customer_to_db,
-                    reset_on_submit=False,
                 ),
                 width="100%",
-                direction="column",
+                align_items="stretch",
                 spacing="4",
             ),
-            style={"max_width": 450},
-            box_shadow="lg",
-            padding="1.5em",
-            border=f"2px solid {rx.color('accent', 7)}",
-            border_radius="25px",
+            scrollbar_size="2",
+            padding_right="4",
         ),
+        width="100%",
+        max_width="800px",
+        height="70vh",
+        padding="6",
+        border_radius="lg",
+        box_shadow="lg",
+        position="relative",
+        overflow="hidden",
     )
-
 
 def _header_cell(text: str, icon: str):
     return rx.table.column_header_cell(
@@ -323,7 +253,7 @@ def _header_cell(text: str, icon: str):
 def main_table():
     return rx.fragment(
         rx.flex(
-            add_customer_button(),
+            add_document_button(),
             rx.spacer(),
             rx.hstack(
                 rx.cond(
@@ -337,11 +267,11 @@ def main_table():
                     size="3",
                     on_change=lambda sort_value: State.sort_values(sort_value),
                 ),
-                rx.input(
-                    placeholder="Search here...",
-                    size="3",
-                    on_change=lambda value: State.filter_values(value),
-                ),
+                # rx.input(
+                #     placeholder="Search here...",
+                #     size="3",
+                #     on_change=lambda value: State.filter_values(value),
+                # ),
                 spacing="3",
                 align="center",
             ),

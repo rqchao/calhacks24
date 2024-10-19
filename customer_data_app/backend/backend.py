@@ -2,8 +2,8 @@ import reflex as rx
 from typing import Literal, Union
 from sqlmodel import select, asc, desc, or_, func, cast, String
 from datetime import datetime, timedelta
-from vectordb import create_chroma_db, add_to_chroma_db
-from const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
+from .vectordb import create_chroma_db, add_to_chroma_db
+from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
 
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
 
@@ -67,8 +67,39 @@ class State(rx.State):
     # Values for current and previous month
     current_month_values: MonthValues = MonthValues()
     previous_month_values: MonthValues = MonthValues()
-    vector_db = create_chroma_db("Notes")
+    # vector_db: any = None
+    document_content: str = """# Links and Switches \n Links and switches have limited capacity → 
+    how do we share space? We typically **dynamically allocate based on demand**. This is based on 
+    the idea that the **peak of aggregate demand is often lower than the aggregate of peak demands**. 
+    This approach is much more efficient. Peaks still happen, causing delays or drops, but we tolerate 
+    it. Some firms like financial exchanges build their own statically-allocated networks to prevent 
+    any delays, and are less sensitive of the cost of doing so. \n ## How do we actually do this dynamic allocation, though? \n - Best effort: everyone sends and see what happens. \n - **Packet 
+    switching** does this by forwarding each packet it receives individually, without coordination \n - 
+    Reservations: users request bandwidth at start of flow, and release it at end. \n - **Circuit 
+    switching** does this by routing at the start and coordinating all routers along a path \n\n Notice 
+    both are still statistical multiplexing, just at different granularities. We can define burstiness 
+    ($\\frac{\\text{peak usage}}{\\text{{average usage}}}$) as one way to compare the two.
+    """
+    is_streaming: bool = False
 
+    # def __init__(self):
+    #     super().__init__()
+        # self.vector_db = create_chroma_db("Notes")
+
+    def start_streaming(self, _ev=None):
+        self.is_streaming = True
+        # In a real implementation, you would set up an async task to stream content
+        # For demonstration, we'll just update the content after a delay
+        yield rx.set_timeout(1, self.update_content("Initial content\n"))
+        yield rx.set_timeout(2, self.update_content("More content\n"))
+        yield rx.set_timeout(3, self.update_content("Final content"))
+        yield rx.set_timeout(4, self.stop_streaming())
+
+    def update_content(self, new_content: str):
+        self.document_content += new_content
+
+    def stop_streaming(self):
+        self.is_streaming = False
 
     def load_entries(self) -> list[Customer]:
         """Get all users from the database."""
@@ -246,4 +277,3 @@ class State(rx.State):
         add_to_chroma_db(self.vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
         add_to_chroma_db(self.vector_db, "Router Hardware" + NOTE_2_CONTENT)
         add_to_chroma_db(self.vector_db, "Cellular Technologies" + NOTE_3_CONTENT)
-    # mapping between postgres and chromadb needs to be here
