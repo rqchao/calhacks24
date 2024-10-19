@@ -1,30 +1,49 @@
 import reflex as rx
-from ..backend.backend import State, Customer
+from ..backend.backend import State, Note
 from ..components.form_field import form_field
-from ..components.status_badges import status_badge
 
-def show_customer(user: Customer):
+# def _format_date_string(date_string: str) -> str:
+#     try:
+#         date_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
+#         day = date_obj.day
+#         if 4 <= day <= 20 or 24 <= day <= 30:
+#             suffix = "th"
+#         else:
+#             suffix = ["st", "nd", "rd"][day % 10 - 1]
+#         return date_obj.strftime(f'%B {day}{suffix}, %Y')
+#     except ValueError:
+#         return date_string
+
+# class DateFormatter(rx.Component):
+#     date: rx.Var[str]
+
+#     def render(self):
+#         return rx.cond(
+#             self.date != "",
+#             rx.text(_format_date_string(self.date)),
+#             rx.text("No date available")
+#         )
+
+def show_notes(note: Note):
     """Show a customer in a table row."""
 
     return rx.table.row(
-        rx.table.cell(user.name),
-        rx.table.cell(user.email),
-        rx.table.cell(user.phone),
-        rx.table.cell(user.address),
-        rx.table.cell(f"${user.payments:,}"),
-        rx.table.cell(user.date),
-        rx.table.cell(rx.match(
-            user.status,
-            ("Delivered", status_badge("Delivered")),
-            ("Pending", status_badge("Pending")),
-            ("Cancelled", status_badge("Cancelled")),
-            status_badge("Pending")
-        )),
+        rx.table.cell(note.name),
+        rx.table.cell(note.course_id),
+        # rx.table.cell(DateFormatter(date=note.date)),
+        rx.table.cell(note.date),
+        # rx.table.cell(rx.match(
+        #     user.status,
+        #     ("Delivered", status_badge("Delivered")),
+        #     ("Pending", status_badge("Pending")),
+        #     ("Cancelled", status_badge("Cancelled")),
+        #     status_badge("Pending")
+        # )),
         rx.table.cell(
             rx.hstack(
                 rx.icon_button(
                     rx.icon("trash-2", size=22),
-                    on_click=lambda: State.delete_customer(getattr(user, "id")),
+                    on_click=lambda: State.delete_note(getattr(note, "name")),
                     size="2",
                     variant="solid",
                     color_scheme="red",
@@ -32,6 +51,8 @@ def show_customer(user: Customer):
             )
         ),
         style={"_hover": {"bg": rx.color("gray", 3)}},
+        on_click=State.set_content(note.content),
+        cursor="pointer",
         align="center",
     )
 
@@ -41,7 +62,7 @@ def add_document_button() -> rx.Component:
         rx.dialog.trigger(
             rx.button(
                 rx.icon("plus", size=26),
-                rx.text("Add Customer", size="4", display=[
+                rx.text("Add Note", size="4", display=[
                         "none", "none", "block"]),
                 size="3",
             ),
@@ -56,12 +77,12 @@ def add_document_button() -> rx.Component:
                 ),
                 rx.vstack(
                     rx.dialog.title(
-                        "Add New Customer",
+                        "Add New Note",
                         weight="bold",
                         margin="0",
                     ),
                     rx.dialog.description(
-                        "Fill the form with the customer's info",
+                        "Fill out the form with the note details and content",
                     ),
                     spacing="1",
                     height="100%",
@@ -78,56 +99,45 @@ def add_document_button() -> rx.Component:
                     rx.flex(
                         # Name
                         form_field(
-                            "Name",
-                            "Customer Name",
+                            "Title",
+                            "Note Title",
                             "text",
                             "name",
-                            "user",
+                            "a-large-small",
                         ),
-                        # Email
+                        # Course ID
                         form_field(
-                            "Email", "user@reflex.dev", "email", "email", "mail"
-                        ),
-                        # Phone
-                        form_field(
-                            "Phone",
-                            "Customer Phone",
-                            "tel",
-                            "phone",
-                            "phone"
-                        ),
-                        # Address
-                        form_field(
-                            "Address",
-                            "Customer Address",
+                            "Course ID",
+                            "CS 61A",
                             "text",
-                            "address",
-                            "home"
+                            "course_id",
+                            "scan-barcode",
                         ),
-                        # Payments
+                        # Note Content
                         form_field(
-                            "Payment ($)",
-                            "Customer Payment",
-                            "number",
-                            "payments",
-                            "dollar-sign"
+                            "Note Content",
+                            "Content",
+                            "text",
+                            "content",
+                            "notepad-text",
+
                         ),
                         # Status
-                        rx.vstack(
-                            rx.hstack(
-                                rx.icon("truck", size=16, stroke_width=1.5),
-                                rx.text("Status"),
-                                align="center",
-                                spacing="2",
-                            ),
-                            rx.radio(
-                                ["Delivered", "Pending", "Cancelled"],
-                                name="status",
-                                direction="row",
-                                as_child=True,
-                                required=True,
-                            ),
-                        ),
+                        # rx.vstack(
+                        #     rx.hstack(
+                        #         rx.icon("truck", size=16, stroke_width=1.5),
+                        #         rx.text("Status"),
+                        #         align="center",
+                        #         spacing="2",
+                        #     ),
+                        #     rx.radio(
+                        #         ["Delivered", "Pending", "Cancelled"],
+                        #         name="status",
+                        #         direction="row",
+                        #         as_child=True,
+                        #         required=True,
+                        #     ),
+                        # ),
                         direction="column",
                         spacing="3",
                     ),
@@ -141,7 +151,7 @@ def add_document_button() -> rx.Component:
                         ),
                         rx.form.submit(
                             rx.dialog.close(
-                                rx.button("Submit Customer"),
+                                rx.button("Add notes"),
                             ),
                             as_child=True,
                         ),
@@ -150,7 +160,7 @@ def add_document_button() -> rx.Component:
                         mt="4",
                         justify="end",
                     ),
-                    on_submit=State.add_customer_to_db,
+                    on_submit=State.add_note_to_db,
                     reset_on_submit=False,
                 ),
                 width="100%",
@@ -174,7 +184,7 @@ def document_display_box():
                     rx.icon("square-pen", size=34),
                     rx.vstack(
                         rx.heading("Document Content", size="lg"),
-                        rx.text("Viewing and editing document"),
+                        # rx.text("Viewing and editing document"),
                         align_items="start",
                     ),
                     width="100%",
@@ -254,6 +264,7 @@ def main_table():
     return rx.fragment(
         rx.flex(
             add_document_button(),
+            # create_new_note_button(),
             rx.spacer(),
             rx.hstack(
                 rx.cond(
@@ -262,16 +273,11 @@ def main_table():
                     rx.icon("arrow-down-a-z", size=28, stroke_width=1.5, cursor="pointer", on_click=State.toggle_sort),
                 ),
                 rx.select(
-                    ["name", "email", "phone", "address", "payments", "date", "status"],
-                    placeholder="Sort By: Name",
+                    ["name", "course_id", "date"],
+                    placeholder="Sort By: Date",
                     size="3",
                     on_change=lambda sort_value: State.sort_values(sort_value),
                 ),
-                # rx.input(
-                #     placeholder="Search here...",
-                #     size="3",
-                #     on_change=lambda value: State.filter_values(value),
-                # ),
                 spacing="3",
                 align="center",
             ),
@@ -283,17 +289,13 @@ def main_table():
         rx.table.root(
             rx.table.header(
                 rx.table.row(
-                    _header_cell("Name", "user"),
-                    _header_cell("Email", "mail"),
-                    _header_cell("Phone", "phone"),
-                    _header_cell("Address", "home"),
-                    _header_cell("Payments", "dollar-sign"),
+                    _header_cell("Title", "a-large-small"),
+                    _header_cell("Course ID", "scan-barcode"),
                     _header_cell("Date", "calendar"),
-                    _header_cell("Status", "truck"),
-                    _header_cell("Actions", "cog"),
+                    _header_cell("Delete", "trash-2")
                 ),
             ),
-            rx.table.body(rx.foreach(State.users, show_customer)),
+            rx.table.body(rx.foreach(State.notes, show_notes)),
             variant="surface",
             size="3",
             width="100%",
