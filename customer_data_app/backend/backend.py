@@ -2,6 +2,7 @@ import reflex as rx
 from typing import Literal, Union
 from sqlmodel import select, asc, desc, or_, func, cast, String
 from datetime import datetime, timedelta
+from vectordb import create_chroma_db, add_to_chroma_db
 
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
 
@@ -29,6 +30,22 @@ class Customer(rx.Model, table=True):
     status: str
 
 
+class User(rx.Model, table=True):
+    """The user model."""
+
+    name: str
+    email: str
+    phone: str
+
+
+class Note(rx.Model, table=True):
+    """The note model."""
+
+    name: str
+    content: str # is there a way to represent like latex here or smth
+    date: str
+
+
 class MonthValues(rx.Base):
     """Values for a month."""
 
@@ -49,6 +66,7 @@ class State(rx.State):
     # Values for current and previous month
     current_month_values: MonthValues = MonthValues()
     previous_month_values: MonthValues = MonthValues()
+    vector_db = create_chroma_db("Notes")
 
 
     def load_entries(self) -> list[Customer]:
@@ -132,6 +150,24 @@ class State(rx.State):
     def get_user(self, user: Customer):
         self.current_user = user
 
+    
+    def add_notes(self, form_data: dict):
+        self.current_note = form_data
+        self.current_note["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with rx.session() as session: # TODO: change below to be based on users
+            if session.exec(
+                select(User).where(User.email == self.current_user["email"])
+            ).first():
+                return rx.window_alert("User with this email already exists")
+            session.add(User(**self.current_user))
+            session.commit()
+        self.load_entries()
+
+        # add_to_chroma_db(vector_db, self.current_note["content"])
+
+        return rx.toast.info(f"Note page {self.current_note['name']} has been added.", position="bottom-right")
+
 
     def add_customer_to_db(self, form_data: dict):
         self.current_user = form_data
@@ -184,3 +220,5 @@ class State(rx.State):
     @rx.var
     def delivers_change(self) -> float:
         return _get_percentage_change(self.current_month_values.num_delivers, self.previous_month_values.num_delivers)
+    
+    # mapping between postgres and chromadb needs to be here

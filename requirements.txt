@@ -5,3 +5,5 @@ websockets==12.0
 janus==1.0.0
 python-dotenv
 deepgram-sdk
+groq
+chromadb
