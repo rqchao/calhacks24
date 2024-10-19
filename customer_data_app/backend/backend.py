@@ -44,6 +44,7 @@ class Note(rx.Model, table=True):
     name: str
     content: str # is there a way to represent like latex here or smth
     date: str
+    course_id: str
 
 
 class MonthValues(rx.Base):
