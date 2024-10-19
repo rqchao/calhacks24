@@ -3,9 +3,9 @@ from typing import Literal, Union
 from sqlmodel import select, asc, desc, or_, func, cast, String
 from datetime import datetime, timedelta
 from vectordb import create_chroma_db, add_to_chroma_db
+from const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
 
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
-
 
 def _get_percentage_change(value: Union[int, float], prev_value: Union[int, float]) -> float:
     percentage_change = (
@@ -222,4 +222,28 @@ class State(rx.State):
     def delivers_change(self) -> float:
         return _get_percentage_change(self.current_month_values.num_delivers, self.previous_month_values.num_delivers)
     
+
+    def create_sample_notes(self):
+        now = datetime.now()
+
+        note_1 = {"name": "Introduction to the Internet", 
+                  "content": NOTE_1_CONTENT, 
+                  "date": datetime(now.year, now.month, 1), 
+                  "course_id": "Networking 101"}
+        note_2 = {"name": "Router Hardware", 
+                  "content": NOTE_2_CONTENT, 
+                  "date": datetime(now.year, now.month, 5), 
+                  "course_id": "Networking 101"}
+        note_3 = {"name": "Cellular Technologies", 
+                  "content": NOTE_3_CONTENT, 
+                  "date": datetime(now.year, now.month, 11), 
+                  "course_id": "Networking 101"}
+        
+        self.add_notes(note_1)
+        self.add_notes(note_2)
+        self.add_notes(note_3)
+
+        add_to_chroma_db(self.vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
+        add_to_chroma_db(self.vector_db, "Router Hardware" + NOTE_2_CONTENT)
+        add_to_chroma_db(self.vector_db, "Cellular Technologies" + NOTE_3_CONTENT)
     # mapping between postgres and chromadb needs to be here
