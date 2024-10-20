@@ -3,7 +3,7 @@ import reflex as rx
 from typing import Literal, Union
 from sqlmodel import select, asc, desc, or_, func, cast, String, Field
 from datetime import datetime, timedelta
-from .vectordb import create_chroma_db, add_to_chroma_db
+from .vectordb import create_chroma_db, add_to_chroma_db, get_relevant_files
 from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
 
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
@@ -62,8 +62,12 @@ class State(rx.State):
 
     def perform_search(self):
         # Simulating a search function. Replace this with your actual search logic.
-        self.search_results = [f"Result {i} for '{self.search_query}'" for i in range(1, 6)]
+        results = get_relevant_files(self.search_query, vector_db)
+
+        # self.search_results = [f"Result {i} for '{self.search_query}'" for i in range(1, 6)]
+        self.search_results = [f"{results[0]}"]
         self.show_dialog = True
+
 
     def close_dialog(self):
         self.show_dialog = False
@@ -204,10 +208,10 @@ class State(rx.State):
                   "date": datetime(now.year, now.month, 11), 
                   "course_id": "Networking 101"}
         
-        self.add_notes(note_1)
-        self.add_notes(note_2)
-        self.add_notes(note_3)
+        self.add_note_to_db(note_1)
+        self.add_note_to_db(note_2)
+        self.add_note_to_db(note_3)
 
-        add_to_chroma_db(vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
-        add_to_chroma_db(vector_db, "Router Hardware" + NOTE_2_CONTENT)
-        add_to_chroma_db(vector_db, "Cellular Technologies" + NOTE_3_CONTENT)
+        # add_to_chroma_db(vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
+        # add_to_chroma_db(vector_db, "Router Hardware" + NOTE_2_CONTENT)
+        # add_to_chroma_db(vector_db, "Cellular Technologies" + NOTE_3_CONTENT)

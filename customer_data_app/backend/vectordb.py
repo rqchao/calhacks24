@@ -46,9 +46,9 @@ def add_to_chroma_db(db: chromadb.Collection, note_content: str, random_id: str)
         ids=random_id
     )
 
-def get_relevant_files(query: str, db: chromadb.Collection):
+def get_relevant_files(query: str, db: chromadb.Collection) -> list[str]:
     results = db.query(query_texts=[query], n_results=1)
-    return results["ids"][0]
+    return results["documents"][0]
 
 # def query_rag(query, db):
 #     files = get_relevant_files(query, db)
