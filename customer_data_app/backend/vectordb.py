@@ -1,4 +1,3 @@
-import uuid
 import google.generativeai as genai
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
@@ -19,6 +18,8 @@ safety_settings = [
 
 model = genai.GenerativeModel('models/gemini-1.5-flash', safety_settings=safety_settings)
 
+chroma_client = chromadb.PersistentClient()
+
 class GeminiEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
         model = 'models/text-embedding-004'
@@ -27,9 +28,8 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
                                     content=input,
                                     task_type="retrieval_document",
                                     title=title)["embedding"]
-  
+
 def create_chroma_db(name: str):
-    chroma_client = chromadb.Client()
     db = chroma_client.get_or_create_collection(name=name, embedding_function=GeminiEmbeddingFunction())
     return db
 
