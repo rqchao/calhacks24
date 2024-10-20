@@ -27,7 +27,7 @@ def show_notes(note: Note):
             "_hover": {"bg": rx.color("gray", 3)},
             "bg": rx.cond(is_selected, rx.color("gray", 2), "transparent"),
         },
-        on_click=lambda: State.select_note(note),
+        on_click=lambda: State.select_note(note.uuid),
         cursor="pointer",
         align="center",
     )
@@ -180,7 +180,6 @@ def document_display_box():
                     rx.icon("square-pen", size=34),
                     rx.vstack(
                         rx.heading("Document Content", size="lg"),
-                        # rx.text("Viewing and editing document"),
                         align_items="start",
                     ),
                     width="100%",
@@ -189,22 +188,9 @@ def document_display_box():
                 ),
                 rx.divider(),
                 rx.box(
-                    rx.cond(
-                        State.is_streaming,
-                        rx.hstack(
-                            rx.image(
-                                src="llama.svg",
-                                height="1.5em",
-                                class_name="animate-pulse",
-                            ),
-                            rx.text("Streaming..."),
-                            spacing="2",
-                        ),
-                        rx.text(""),
-                    ),
                     rx.box(
                         rx.markdown(
-                            State.selected_note.content,
+                            State.display_content,
                             color="black",
                         ),
                         rx.box(

@@ -6,7 +6,7 @@ def navbar():
     return rx.flex(
         rx.badge(
             rx.icon(tag="paw-print", size=16),
-            rx.heading("Oski's Little Helper", size="4"),
+            rx.heading("Ghostwriter", size="4"),
             color_scheme="indigo",
             radius="large",
             align="center",

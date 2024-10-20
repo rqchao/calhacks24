@@ -63,6 +63,10 @@ class State(rx.State):
     search_results: list[str] = []
     show_dialog: bool = False
 
+    @rx.var
+    def display_content(self) -> str:
+        return self.document_content
+
     def perform_search(self):
         # Simulating a search function. Replace this with your actual search logic.
         results = get_relevant_files(self.search_query, vector_db)
@@ -71,29 +75,20 @@ class State(rx.State):
         self.search_results = [f"{results[0]}"]
         self.show_dialog = True
 
-    def select_note(self, note):
-        self.selected_note = note
+    def select_note(self, note_uuid: str):
+        note_obj = self.get_note_by_uuid(note_uuid)
+        print("switched")
+        self.selected_note = note_uuid
+        try:
+            self.document_content = note_obj.content
+        except AttributeError as e:
+            print("e")
 
     def close_dialog(self):
         self.show_dialog = False
-
-    def start_streaming(self, _ev=None):
-        self.is_streaming = True
-        # In a real implementation, you would set up an async task to stream content
-        # For demonstration, we'll just update the content after a delay
-        yield rx.set_timeout(1, self.update_content("Initial content\n"))
-        yield rx.set_timeout(2, self.update_content("More content\n"))
-        yield rx.set_timeout(3, self.update_content("Final content"))
-        yield rx.set_timeout(4, self.stop_streaming())
-
-    def update_content(self, new_content: str):
-        self.document_content += new_content
     
     def set_content(self, new_content: str):
         self.document_content = new_content
-
-    def stop_streaming(self):
-        self.is_streaming = False
 
     def load_entries(self) -> list[Note]:
         """Get all notes from the database."""
@@ -206,10 +201,17 @@ class State(rx.State):
             microphone = None
             dg_connection = None
             
-            self.update_notes(transcript)
-
-    def update_notes(self, transcript: str):
+            print("DEBUGGY HERE")
+            # self.update_notes(transcript)
+            async for _ in self.update_notes(transcript):
+                # Each yield in update_notes will trigger a UI update
+                await asyncio.sleep(0.05)  # Small delay to allow UI to update
+    
+    async def update_notes(self, transcript: str):
         """Returns additional information added to note."""
+        self.is_streaming = True
+        yield
+
         results = get_relevant_files(transcript, vector_db)
         uuid = results[0]
 
@@ -217,8 +219,11 @@ class State(rx.State):
 
         if not note:
             raise Exception("Note not found.")
+        existing_content = note.content
         
-        self.select_note(note)
+        self.select_note(uuid)
+        yield
+        await asyncio.sleep(1)
         
         note_with_locations = ""
         lines = [line for line in note.content.split('\n') if line.strip()]
@@ -227,23 +232,34 @@ class State(rx.State):
             note_with_locations += line + '\n' + str(index) + '\n'
             index += 1
 
-        location, rewritten_summary  = self.location_and_new_content(note_with_locations, transcript)
+        location, new_additions = self.location_and_new_content(note_with_locations, transcript)
 
-        new_content = ""
-        index = 0
-        for line in lines:
-            new_content += line + '\n' + '\n'
-            index += 1
-            if index == location:
-                new_content += rewritten_summary + '\n' + '\n'
+        # Stream-add only the new additions
+        # for i in range(len(new_additions)):
+        #     await asyncio.sleep(0.05)  # Adjust the delay as needed
+        #     self.document_content = (
+        #         self.document_content[:location] + 
+        #         new_additions[:i+1] + 
+        #         self.document_content[location:]
+        #     )
+        #     yield
+        # only at end, testing.
+        for i in range(len(new_additions)):
+            await asyncio.sleep(0.1)  # Adjust the delay as needed
+            self.document_content = existing_content + new_additions[:i+1]
+            print(self.document_content[-1])
+            yield
 
+
+        # Update the note in the database
         with rx.session() as session:
             curr_note = session.exec(select(Note).where(Note.uuid == uuid)).first()
-            curr_note.content = new_content
+            curr_note.content = self.document_content
             session.add(curr_note)
             session.commit()
 
-        return rewritten_summary
+        self.is_streaming = False
+        yield
 
     def location_and_new_content(self, note_with_locations: str, new_info: str) -> tuple:
         messages = [

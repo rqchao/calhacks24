@@ -34,6 +34,6 @@ app = rx.App(
 
 app.add_page(
     index,
-    title="Oski's Little Helper",
+    title="Ghostwriter",
     description="Your virtual teaching assistant.",
 )
