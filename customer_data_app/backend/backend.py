@@ -51,6 +51,7 @@ class State(rx.State):
     search_value: str = ""
     current_note: Note = Note()
     document_content: str = ""
+    new_content: str = ""
     selected_note: Note = Note()
     is_streaming: bool = False
     recording: bool = False
@@ -77,12 +78,11 @@ class State(rx.State):
 
     def select_note(self, note_uuid: str):
         note_obj = self.get_note_by_uuid(note_uuid)
-        print("switched")
         self.selected_note = note_uuid
         try:
             self.document_content = note_obj.content
         except AttributeError as e:
-            print("e")
+            pass
 
     def close_dialog(self):
         self.show_dialog = False
@@ -137,7 +137,8 @@ class State(rx.State):
 
     @rx.background
     async def start_recording(self):
-        global dg_connection, microphone
+        global dg_connection, microphone, transcript
+        transcript = ""
         if dg_connection is not None:
             return
 
@@ -149,13 +150,7 @@ class State(rx.State):
                 global transcript
                 sentence = result.channel.alternatives[0].transcript
                 if result.is_final:
-                    # print("DEBUG3")
                     transcript += sentence + " "
-                    # print(transcript)
-                    # breakpoint()
-                    # State.update_transcript(sentence)
-                    # asyncio.create_task(State.update_transcript(sentence))
-                    # print("DEBUG4")
 
             dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
 
@@ -201,29 +196,92 @@ class State(rx.State):
             microphone = None
             dg_connection = None
             
-            print("DEBUGGY HERE")
-            # self.update_notes(transcript)
-            async for _ in self.update_notes(transcript):
-                # Each yield in update_notes will trigger a UI update
-                await asyncio.sleep(0.05)  # Small delay to allow UI to update
+            return State.update_notes(transcript)
     
+    @rx.background
     async def update_notes(self, transcript: str):
         """Returns additional information added to note."""
-        self.is_streaming = True
-        yield
-
+        print(transcript)
         results = get_relevant_files(transcript, vector_db)
-        uuid = results[0]
+        
+        if not results:
+            now = datetime.now()
+            random_uuid = str(uuid.uuid4())
 
-        note = self.get_note_by_uuid(uuid)
+            messages = [
+            {
+                "role": "user", 
+                "content": (
+                    f"""Given this transcript: {transcript}, what's a reasonable class this could be for? Keep it to 2-3 words."""
+                    )
+                },
+            ]
+            
+            chat_completion = client.chat.completions.create(
+                messages=messages,
+                model="llama-3.1-70b-versatile",
+            )
+
+            course_id = chat_completion.choices[0].message.content
+
+            new_note_form = {"name": "New Notepage", 
+                  "content": "", 
+                  "date": datetime(now.year, now.month, 1), 
+                  "course_id": f"{course_id}",
+                  "uuid": random_uuid}
+        
+            async with self:
+                self.add_note_to_db(new_note_form)
+                # note = self.get_note_by_uuid(random_uuid)
+                # if not note:
+                #     raise Exception("Note not found.")
+                self.select_note(random_uuid)
+                self.document_content = ""
+
+            messages = [
+            {
+                "role": "user", 
+                "content": (
+                    f"""Given the current transcript: {transcript}, return me some notes based on the below example: {NOTE_1_CONTENT}. Do not include the original transcript in your return."""
+                    )
+                },
+            ]
+            
+            chat_completion = client.chat.completions.create(
+                messages=messages,
+                model="llama-3.1-70b-versatile",
+            )
+
+            new_content = chat_completion.choices[0].message.content
+            print(new_content)
+
+
+            chunk_size = 3  # Number of characters to reveal per chunk, adjust as needed
+            for i in range(0, len(new_content), chunk_size):
+                print(self.document_content)
+                async with self:
+                    # Add a chunk of the response to the document content
+                    self.document_content += new_content[i:i+chunk_size]
+                # Yield control to allow UI to update between chunks
+                await asyncio.sleep(0.01)  # Adjust delay to control typing speed
+
+            with rx.session() as session:
+                curr_note = session.exec(select(Note).where(Note.uuid == random_uuid)).first()
+                curr_note.content = self.document_content
+                session.add(curr_note)
+                session.commit()
+
+            return
+
+        result_uuid = results[0]
+
+        note = self.get_note_by_uuid(result_uuid)
 
         if not note:
             raise Exception("Note not found.")
-        existing_content = note.content
-        
-        self.select_note(uuid)
-        yield
-        await asyncio.sleep(1)
+    
+        async with self:
+            self.select_note(result_uuid)
         
         note_with_locations = ""
         lines = [line for line in note.content.split('\n') if line.strip()]
@@ -234,32 +292,37 @@ class State(rx.State):
 
         location, new_additions = self.location_and_new_content(note_with_locations, transcript)
 
-        # Stream-add only the new additions
-        # for i in range(len(new_additions)):
-        #     await asyncio.sleep(0.05)  # Adjust the delay as needed
-        #     self.document_content = (
-        #         self.document_content[:location] + 
-        #         new_additions[:i+1] + 
-        #         self.document_content[location:]
-        #     )
-        #     yield
-        # only at end, testing.
-        for i in range(len(new_additions)):
-            await asyncio.sleep(0.1)  # Adjust the delay as needed
-            self.document_content = existing_content + new_additions[:i+1]
-            print(self.document_content[-1])
-            yield
+        before_new_content = ""
+        after_new_content = ""
+        index = 0
+        for line in lines:
+            if index <= location:
+                before_new_content += line + '\n' + '\n'
+            else:
+                after_new_content += line + '\n' + '\n'
+            index += 1
 
+        chunk_size = 1  # Number of characters to reveal per chunk, adjust as needed
+        for i in range(0, len(new_additions), chunk_size):
+            async with self:
+                # Add a chunk of the response to the document content
+                self.new_content += new_additions[i:i+chunk_size]
+                self.document_content = before_new_content + '\n' + self.new_content + '\n' + after_new_content
+                # print(f"Adding chunk: {new_additions[i:i+chunk_size]}")  # Debugging print
+            # Yield control to allow UI to update between chunks
+            await asyncio.sleep(0.05)  # Adjust delay to control typing speed
+        async with self:
+            print("Streaming complete.")
 
-        # Update the note in the database
+        # # Update the note in the database
         with rx.session() as session:
-            curr_note = session.exec(select(Note).where(Note.uuid == uuid)).first()
+            curr_note = session.exec(select(Note).where(Note.uuid == result_uuid)).first()
             curr_note.content = self.document_content
             session.add(curr_note)
             session.commit()
 
-        self.is_streaming = False
-        yield
+        async with self:
+            self.new_content = ""
 
     def location_and_new_content(self, note_with_locations: str, new_info: str) -> tuple:
         messages = [
@@ -312,7 +375,8 @@ locations: {note_with_locations} to form your output."""
 
         self.current_note = form_data
         self.current_note["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.current_note["uuid"] = random_id
+        if "uuid" not in form_data.keys():
+            self.current_note["uuid"] = random_id
 
         with rx.session() as session:
             if session.exec(

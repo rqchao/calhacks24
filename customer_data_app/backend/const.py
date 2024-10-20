@@ -58,8 +58,8 @@ increasing by orders of magnitude). The massive scale of the Internet also means
 we design has to support the massive range of users and applications on the Internet (e.g. some 
 need more capacity than others, some may be malicious).
 
-EXPECTED OUTPUT (do NOT output this portion, just the below line):
-10===The Internet is Scalable
+EXPECTED OUTPUT (do NOT output this portion, just the below line. it's very important you don't output anything before the number.):
+10===## The Internet is Scalable
 - **Enables massive scale**
 - Interconnects diverse operators
 - Supports various technologies (wireless, optical)

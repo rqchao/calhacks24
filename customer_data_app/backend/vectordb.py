@@ -46,8 +46,10 @@ def add_to_chroma_db(db: chromadb.Collection, note_content: str, random_id: str)
         ids=random_id
     )
 
-def get_relevant_files(query: str, db: chromadb.Collection) -> list[str]:
+def get_relevant_files(query: str, db: chromadb.Collection) -> list[str] | None:
     results = db.query(query_texts=[query], n_results=1)
+    if results["distances"][0][0] >= 0.7:
+        return None
     return results["ids"][0]
 
 # def query_rag(query, db):
