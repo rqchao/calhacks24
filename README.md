@@ -1,1 +1,4 @@
-# calhacks24
+![title](https://github.com/user-attachments/assets/c4c0f9e8-4919-4b2f-9348-7325e92bdfa6)
+Introducing Ghostwriter: Your silent partner in educational excellence. Ever been in a class where resources are so hard to come by, you find yourself living in office hours? As teaching assistants on increasingly short-handed course staffs, it can be difficult to keep up with student demands, while making long-lasting improvements to your favorite courses. 
+Imagine effortlessly improving your course materials as you interact with students during office hours. Ghostwriter listens intelligently to these conversations, capturing valuable insights and automatically updating your notes and class documentation. No more tedious post-session revisions or forgotten improvement ideas.
+Ghostwriter turns every interaction into an opportunity for improvement. It's the invisible presence that delivers visible results, making continuous refinement effortless and impactful. With Ghostwriter, you're not just tutoring or bug-bashing - you're evolving your content with every conversation.
