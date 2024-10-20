@@ -260,7 +260,7 @@ def _header_cell(text: str, icon: str):
 def test_chroma_query():
     return rx.box(
         rx.input(
-            placeholder="Debug semantic...",
+            placeholder="Semantic search...",
             type="text",
             value=State.search_query,
             on_change=State.set_search_query,

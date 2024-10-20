@@ -1,6 +1,15 @@
 import uuid
 import reflex as rx
-from typing import Literal, Union
+import threading
+import asyncio
+from typing import Optional
+from deepgram import (
+    DeepgramClient,
+    DeepgramClientOptions,
+    LiveTranscriptionEvents,
+    LiveOptions,
+    Microphone,
+)
 from sqlmodel import select, asc, desc, or_, func, cast, String, Field
 from datetime import datetime, timedelta
 from .vectordb import create_chroma_db, add_to_chroma_db, get_relevant_files
@@ -9,6 +18,9 @@ from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
 
 vector_db = create_chroma_db("Notes")
+dg_connection = None
+microphone: Optional[Microphone] = None
+
 
 class User(rx.Model, table=True):
     """The user model."""
@@ -49,6 +61,10 @@ class State(rx.State):
     """
     is_streaming: bool = False
     recording: bool = False
+    transcript: str = ""
+
+    async def update_transcript(self, text: str):
+        self.transcript += text + " "
 
     # def __init__(self):
     #     super().__init__()
@@ -57,8 +73,6 @@ class State(rx.State):
     search_query: str = ""
     search_results: list[str] = []
     show_dialog: bool = False
-
-
 
     def perform_search(self):
         # Simulating a search function. Replace this with your actual search logic.
@@ -89,9 +103,6 @@ class State(rx.State):
 
     def stop_streaming(self):
         self.is_streaming = False
-
-    def toggle_recording(self):
-        self.recording = not self.recording
 
     def load_entries(self) -> list[Note]:
         """Get all notes from the database."""
@@ -129,6 +140,66 @@ class State(rx.State):
     def filter_values(self, search_value):
         self.search_value = search_value
         self.load_entries()
+
+    def toggle_recording(self):
+        if not self.recording:
+            self.start_recording()
+        else:
+            self.stop_recording()
+        self.recording = not self.recording
+
+    def start_recording(self):
+        threading.Thread(target=self._record_voice, daemon=True).start()
+
+    def stop_recording(self):
+        if microphone:
+            microphone.finish()
+        if dg_connection:
+            dg_connection.finish()
+
+    def _record_voice(self):
+        try:
+            deepgram: DeepgramClient = DeepgramClient()
+            dg_connection = deepgram.listen.websocket.v("1")
+
+            def on_message(self, result, **kwargs):
+                sentence = result.channel.alternatives[0].transcript
+                if result.is_final:
+                    asyncio.run(State.update_transcript(sentence))
+
+            dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
+
+            options = LiveOptions(
+                model="nova-2",
+                language="en-US",
+                smart_format=True,
+                encoding="linear16",
+                channels=1,
+                sample_rate=16000,
+                # interim_results=True,
+                # utterance_end_ms="1000",
+                # vad_events=True,
+                # endpointing=300,
+            )
+            addons = {
+                # Prevent waiting for additional numbers
+                "no_delay": "true"
+            }
+
+
+            if dg_connection.start(options, addons=addons) is False:
+                print("Failed to connect to Deepgram")
+                return
+
+            microphone = Microphone(dg_connection.send)
+            microphone.start()
+
+        except Exception as e:
+            print(f"Could not open socket: {e}")
+
+    async def update_transcript(self, text: str):
+        self.transcript += text + " "
+
     
     def add_note_to_db(self, form_data: dict):
         random_id = str(uuid.uuid4())

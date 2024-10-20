@@ -1,7 +1,3 @@
-# Copyright 2023-2024 Deepgram SDK contributors. All Rights Reserved.
-# Use of this source code is governed by a MIT license that can be found in the LICENSE file.
-# SPDX-License-Identifier: MIT
-
 from dotenv import load_dotenv
 from time import sleep
 import logging
@@ -22,7 +18,7 @@ load_dotenv()
 is_finals = []
 
 
-def main():
+def get_voice_transcript():
     try:
         # example of setting up a client config. logging values: WARNING, VERBOSE, DEBUG, SPAM
         # config = DeepgramClientOptions(
@@ -145,4 +141,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    get_voice_transcript()
