@@ -21,12 +21,6 @@ NOTE_1_CONTENT = """
   - Competing entities forced to cooperate
   - Complicates innovation (need common protocols)
 
-## The Internet is Scalable
-- **Enables massive scale**
-  - Interconnects diverse operators
-  - Supports various technologies (wireless, optical)
-  - Adapts to evolving capabilities
-
 ## Key Considerations
 1. **Asynchronous operation**
    - Data can't move faster than light

@@ -220,7 +220,7 @@ class State(rx.State):
         
         self.select_note(note)
         
-        summary = self.summarize_transcript(transcript)
+        # summary = self.summarize_transcript(transcript)
 
         note_with_locations = ""
         lines = [line for line in note.content.split('\n') if line.strip()]
@@ -233,7 +233,7 @@ class State(rx.State):
 
         # print("old_content: ", note.content)
 
-        location, rewritten_summary  = self.location_and_new_content(note_with_locations, summary)
+        location, rewritten_summary  = self.location_and_new_content(note_with_locations, transcript)
 
         new_content = ""
         index = 0
@@ -251,44 +251,45 @@ class State(rx.State):
             session.add(curr_note)
             session.commit()
 
-        return summary
+        return rewritten_summary
 
         # self.update_note_to_db(new_note)
         
         # use groq and chatgpt to summarize the important information in transcript. then, figure out which line of note we should add it to, then return the entire note with the new information added.
 
-    def summarize_transcript(self, transcript: str) -> str:
-        messages = [
-            {
-                "role": "system", 
-                "content": "You are an assistant that summarizes a transcript"
-            },
-            {
-                "role": "user", 
-                "content": f"{transcript}"
-            }
-        ]
+    # def summarize_transcript(self, transcript: str) -> str:
+    #     messages = [
+    #         {
+    #             "role": "system", 
+    #             "content": "You are an assistant that summarizes a transcript"
+    #         },
+    #         {
+    #             "role": "user", 
+    #             "content": f"{transcript}"
+    #         }
+    #     ]
         
-        chat_completion = client.chat.completions.create(
-            messages=messages,
-            model="llama3-70b-8192",
-        )
+    #     chat_completion = client.chat.completions.create(
+    #         messages=messages,
+    #         model="llama3-70b-8192",
+    #     )
 
-        print("DEBUG", chat_completion.choices[0].message.content)
+    #     print("DEBUG", chat_completion.choices[0].message.content)
 
-        return chat_completion.choices[0].message.content
+    #     return chat_completion.choices[0].message.content
     
-    def location_and_new_content(self, note_with_locations: str, summary: str) -> tuple:
+    def location_and_new_content(self, note_with_locations: str, new_info: str) -> tuple:
         messages = [
             {
                 "role": "system", 
                 "content": (
                     """You are an assistant that is given a note page for a class with a number between 
-                    each paragraph, and a summary of new information. Your task is to determine which 
+                    each paragraph, and new information. Your task is to determine which 
                     number is the most suitable location in the note page to add the new information. 
-                    Additionally, you must rewrite the provided summary to fit seamlessly into the note's 
-                    existing content. Return both the number and the rewritten summary, separated by a 
-                    delimiter '###'."""
+                    Additionally, you must synthesize and rewrite the new information in Github-flavored markdown to fit 
+                    seamlessly into the note's existing content. Return both the number and the rewritten 
+                    new information in markdown, separated by a delimiter '###'. Pay attention to and include necessary 
+                    spacing, punctuation, and symbols for the Github-flavored markdown text."""
                 )
             },
             {
@@ -299,23 +300,28 @@ class State(rx.State):
 
                     INPUTS:
                     Input 1: note page with locations
-
-                    The introduction to cellular networks covers the basics of radio communication.
+                    ## Why is the Internet Interesting?
                     0
-                    The role of base stations and antennas is crucial in cellular networks.
+                    - **New problem**: Tying together different, existing networks
                     1
-                    Wireless mobile connectivity faces various challenges due to mobility.
+                    - **Challenges**:
                     2
-                    Infrastructure components such as routers and switches form the backbone.
+                      - No formal model
                     3
+                      - No measurable performance benchmark
+                    4
+                      - Must scale to **billions** of users
+                    5
+                      - Must align with business relationships
+                    6
 
-                    Input 2: summary
-                    Cellular network design must also account for environmental factors that can affect signal strength.
+                    Input 2: new information
+                    Federation enables the tremendous scale of the Internet. Instead of a single operator managing billions of users and trillions of services, we only need to focus on interconnecting all the different operators. Federation also allows us to build the Internet out of a huge diversity of technologies (e.g. wireless, optical), with a huge range of capabilities (e.g. home links with tiny capacity, or undersea cables with huge capacity). These technologies are also constantly evolving, which means we can't aim for a fixed target (e.g. capacity and demand is constantly increasing by orders of magnitude). The massive scale of the Internet also means that any system we design has to support the massive range of users and applications on the Internet (e.g. some need more capacity than others, some may be malicious).
 
                     EXPECTED OUTPUT (do NOT output this portion, just the below line):
-                    2###In addition to challenges posed by mobility, cellular network design must also account for environmental factors that can affect signal strength. This ensures seamless communication across various environments.
+                    4###  - Support a massive range of users and applications
 
-                    Use this summary: {summary}, and the existing note page with 
+                    Use the new information: {new_info}, and the existing note page with 
                     locations: {note_with_locations} to form your output."""
                 )
             },
@@ -326,7 +332,7 @@ class State(rx.State):
             model="llama3-70b-8192",
         )
 
-        output = chat_completion.choices[0].message.content.strip()
+        output = chat_completion.choices[0].message.content
 
         print("LLM_OUTPUT", output)
 
@@ -338,10 +344,10 @@ class State(rx.State):
 
         # print(location)
 
-        if not location.strip().isdigit():
+        if not location.isdigit():
             raise Exception("The location part is not a valid number.")
 
-        return int(location.strip()), rewritten_summary.strip()
+        return int(location), rewritten_summary
 
     
     # def insert_summary_into_note(self, note_content: str, summary: str) -> str:
