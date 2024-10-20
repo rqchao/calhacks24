@@ -14,13 +14,16 @@ from sqlmodel import select, asc, desc, or_, func, cast, String, Field
 from datetime import datetime, timedelta
 from .vectordb import create_chroma_db, add_to_chroma_db, get_relevant_files
 from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
-
+import os
+from groq import Groq
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
 
 vector_db = create_chroma_db("Notes")
 dg_connection = None
 microphone: Optional[Microphone] = None
-
+_recording_task = None
+transcript = ""
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class User(rx.Model, table=True):
     """The user model."""
@@ -61,10 +64,6 @@ class State(rx.State):
     """
     is_streaming: bool = False
     recording: bool = False
-    transcript: str = ""
-
-    async def update_transcript(self, text: str):
-        self.transcript += text + " "
 
     # def __init__(self):
     #     super().__init__()
@@ -142,30 +141,34 @@ class State(rx.State):
         self.load_entries()
 
     def toggle_recording(self):
-        if not self.recording:
-            self.start_recording()
-        else:
-            self.stop_recording()
+        # print("DEBUG1")
         self.recording = not self.recording
+        if self.recording:  
+            return State.start_recording()
+        else:
+            return State.stop_recording()
 
-    def start_recording(self):
-        threading.Thread(target=self._record_voice, daemon=True).start()
+    @rx.background
+    async def start_recording(self):
+        global dg_connection, microphone
+        if dg_connection is not None:
+            return
 
-    def stop_recording(self):
-        if microphone:
-            microphone.finish()
-        if dg_connection:
-            dg_connection.finish()
-
-    def _record_voice(self):
         try:
             deepgram: DeepgramClient = DeepgramClient()
             dg_connection = deepgram.listen.websocket.v("1")
 
             def on_message(self, result, **kwargs):
+                global transcript
                 sentence = result.channel.alternatives[0].transcript
                 if result.is_final:
-                    asyncio.run(State.update_transcript(sentence))
+                    # print("DEBUG3")
+                    transcript += sentence + " "
+                    # print(transcript)
+                    # breakpoint()
+                    # State.update_transcript(sentence)
+                    # asyncio.create_task(State.update_transcript(sentence))
+                    # print("DEBUG4")
 
             dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
 
@@ -193,14 +196,105 @@ class State(rx.State):
 
             microphone = Microphone(dg_connection.send)
             microphone.start()
+            while self.recording:
+                await asyncio.sleep(0.1)
 
         except Exception as e:
             print(f"Could not open socket: {e}")
+        finally:
+            return State.stop_recording()
+            
+    @rx.background
+    async def stop_recording(self):
+        global dg_connection, microphone
+        async with self:
+            self.recording = False
+            if microphone:
+                microphone.finish()
+            if dg_connection:
+                dg_connection.finish()
+            microphone = None
+            dg_connection = None
+            
+            self.update_notes(transcript)
 
-    async def update_transcript(self, text: str):
-        self.transcript += text + " "
+    def update_notes(self, transcript: str):
+        results = get_relevant_files(transcript, vector_db)
+        uuid = results[0]
 
+        note = self.get_note_by_uuid(uuid)
+
+        if not note:
+            raise Exception("Note not found.")
+        
+        summary = self.summarize_transcript(transcript)
+
+        print("summary: ", summary)
+
+        print("old content: ", note.content)
+
+        new_content = self.insert_summary_into_note(note.content, summary)
+
+        print("new_content: ", new_content)
+
+        with rx.session() as session:
+            curr_note = session.exec(select(Note).where(Note.uuid == uuid)).first()
+            curr_note.content = new_content
+            session.add(curr_note)
+            session.commit()
+        return note
+
+        # self.update_note_to_db(new_note)
+        
+        # use groq and chatgpt to summarize the important information in transcript. then, figure out which line of note we should add it to, then return the entire note with the new information added.
+
+    def summarize_transcript(self, transcript: str) -> str:
+        messages = [
+            {
+                "role": "system", 
+                "content": "You are an assistant that summarizes a transcript"
+            },
+            {
+                "role": "user", 
+                "content": f"{transcript}"
+            }
+        ]
+        
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="llama3-70b-8192",
+        )
+
+        print("DEBUG", chat_completion.choices[0].message.content)
+
+        return chat_completion.choices[0].message.content
     
+    def insert_summary_into_note(self, note_content: str, summary: str) -> str:
+        messages = [
+            {
+                "role": "system", 
+                "content": "You are an assistant that is given a note page for a class, and a summary of new information. Figure out where in the note page we should add it to, then return the entire note page with the new information added."
+            },
+            {
+                "role": "user", 
+                "content": f"Here's the new information {summary}, and here's the existing note page {note_content}"
+            }
+        ]
+        
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="llama3-70b-8192",
+        )
+
+        return chat_completion.choices[0].message.content
+
+    def get_note_by_uuid(self, note_uuid: str) -> Optional[Note]:
+        """Retrieve a note based on its UUID."""
+        with rx.session() as session:
+            note = session.exec(select(Note).where(Note.uuid == note_uuid)).first()
+            return note
+
+
     def add_note_to_db(self, form_data: dict):
         random_id = str(uuid.uuid4())
 
@@ -221,7 +315,7 @@ class State(rx.State):
 
         add_to_chroma_db(vector_db, self.current_note["content"], random_id)
 
-        print(vector_db.count())
+        # print(vector_db.count())
 
         # Create link between randomized chroma db and postgres id
 
@@ -231,7 +325,7 @@ class State(rx.State):
         self.current_note.update(form_data)
         with rx.session() as session:
             note = session.exec(
-                select(Note).where(Note.id == self.current_note["id"]) # Might need to be uuid now
+                select(Note).where(Note.uuid == self.current_note["uuid"]) # Might need to be uuid now
             ).first()
             for field in Note.get_fields():
                 if field != "id":
