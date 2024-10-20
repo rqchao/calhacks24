@@ -33,7 +33,7 @@ def create_search_box():
     """Create a search box with input field and search icon."""
     return rx.box(
         rx.input(
-        placeholder="Search notes...",
+        placeholder="Search metadata...",
         type="text",
         on_change=lambda value: State.filter_values(value),
         padding_left="1.5rem",
@@ -58,7 +58,7 @@ def record_button():
                 tag="circle",
                 color=rx.cond(State.recording, "red", "white"),
                 fill=rx.cond(State.recording, "red", "white"),
-                display=rx.cond(State.recording, "block", "none"),
+                display=rx.cond(~State.recording, "block", "none"),
                 height="1rem",
                 width="1rem",
                 align_self="center",
@@ -67,7 +67,7 @@ def record_button():
                 tag="square",
                 color=rx.cond(State.recording, "red", "white"),
                 fill=rx.cond(State.recording, "red", "white"),
-                display=rx.cond(~State.recording, "block", "none"),
+                display=rx.cond(State.recording, "block", "none"),
                 height="1rem",
                 width="1rem",
                 align_self="center",

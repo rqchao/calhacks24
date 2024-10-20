@@ -3,20 +3,15 @@ from ..backend.backend import State, Note
 from ..components.form_field import form_field, form_field_textarea
 
 def show_notes(note: Note):
-    """Show a customer in a table row."""
+    """Show a note in a table row with selectable styling."""
+
+    is_selected = State.selected_note.uuid == note.uuid
 
     return rx.table.row(
+        rx.table.cell(note.uuid[:8]),
         rx.table.cell(note.name),
         rx.table.cell(note.course_id),
-        # rx.table.cell(DateFormatter(date=note.date)),
         rx.table.cell(note.date),
-        # rx.table.cell(rx.match(
-        #     user.status,
-        #     ("Delivered", status_badge("Delivered")),
-        #     ("Pending", status_badge("Pending")),
-        #     ("Cancelled", status_badge("Cancelled")),
-        #     status_badge("Pending")
-        # )),
         rx.table.cell(
             rx.hstack(
                 rx.icon_button(
@@ -28,11 +23,15 @@ def show_notes(note: Note):
                 ),
             )
         ),
-        style={"_hover": {"bg": rx.color("gray", 3)}},
-        on_click=State.set_content(note.content),
+        style={
+            "_hover": {"bg": rx.color("gray", 3)},
+            "bg": rx.cond(is_selected, rx.color("gray", 2), "transparent"),
+        },
+        on_click=lambda: State.select_note(note),
         cursor="pointer",
         align="center",
     )
+
 
 
 def push_test_data():
@@ -205,13 +204,13 @@ def document_display_box():
                     ),
                     rx.box(
                         rx.markdown(
-                            State.document_content,
+                            State.selected_note.content,
                             color="black",
                         ),
                         rx.box(
                             rx.button(
                                 rx.icon(tag="copy", size=18),
-                                on_click=[rx.set_clipboard(State.document_content), rx.toast("Copied!")],
+                                on_click=[rx.set_clipboard(State.selected_note.content), rx.toast("Copied!")],
                                 title="Copy",
                                 variant="ghost",
                                 size="sm",
@@ -256,33 +255,42 @@ def _header_cell(text: str, icon: str):
         ),
     )
 
-
 def test_chroma_query():
-    return rx.box(
-        rx.input(
-            placeholder="Semantic search...",
-            type="text",
-            value=State.search_query,
-            on_change=State.set_search_query,
-            # on_key_down=lambda key: State.perform_search() if key == "Enter" else None,
-            on_blur = State.perform_search(),
-            padding_left="1.5rem",
-        ),
-        rx.icon(
-            tag="search",
-            position="absolute",
-            height="1rem",
-            left="0.75rem",
-            color="#9CA3AF",
-            top="0.5rem",
-            width="1rem",
+    return rx.hstack(
+        rx.box(
+            rx.input(
+                placeholder="Semantic search...",
+                type="text",
+                value=State.search_query,
+                on_change=State.set_search_query,
+                # on_blur=State.perform_search(),
+                padding_left="1.5rem",
+                width="100%",
+            ),
+            rx.icon(
+                tag="search",
+                position="absolute",
+                height="1rem",
+                left="0.75rem",
+                color="#9CA3AF",
+                top="50%",
+                transform="translateY(-50%)",
+                width="1rem",
+            ),
+            position="relative",
+            width="100%",
         ),
         rx.dialog.root(
-            rx.dialog.trigger(rx.button("Search")),
+            rx.dialog.trigger(
+                rx.button(
+                    rx.icon(tag="send", height="1.5em", width="1.5em"),
+                    variant="solid",
+                    aria_label="Search",
+                )
+            ),
             rx.dialog.content(
                 rx.dialog.title("Search Results"),
                 rx.dialog.description(
-                    # State.search_results,
                     rx.unordered_list(
                         rx.foreach(
                             State.search_results,
@@ -296,30 +304,41 @@ def test_chroma_query():
                 open=State.show_dialog,
             ),
         ),
-        position="relative",
         width="100%",
+        spacing="1rem",
+        align_items="center",
     )
 
 def main_table():
     return rx.fragment(
-        rx.flex(
+    rx.flex(
             add_document_button(),
             push_test_data(),
-            test_chroma_query(),
             rx.spacer(),
             rx.hstack(
-                rx.cond(
-                    State.sort_reverse,
-                    rx.icon("arrow-down-z-a", size=28, stroke_width=1.5, cursor="pointer", on_click=State.toggle_sort),
-                    rx.icon("arrow-down-a-z", size=28, stroke_width=1.5, cursor="pointer", on_click=State.toggle_sort),
+                rx.box(
+                    test_chroma_query(),
+                    flex_grow="1",
+                    align_self="flex-start",
                 ),
-                rx.select(
-                    ["name", "course_id", "date"],
-                    placeholder="Sort By: Date",
-                    size="3",
-                    on_change=lambda sort_value: State.sort_values(sort_value),
+                rx.spacer(),
+                rx.hstack(
+                    rx.cond(
+                        State.sort_reverse,
+                        rx.icon("arrow-down-z-a", size=28, stroke_width=1.5, cursor="pointer", on_click=State.toggle_sort),
+                        rx.icon("arrow-down-a-z", size=28, stroke_width=1.5, cursor="pointer", on_click=State.toggle_sort),
+                    ),
+                    rx.select(
+                        ["name", "course_id", "date"],
+                        placeholder="Sort By: Date",
+                        size="3",
+                        on_change=lambda sort_value: State.sort_values(sort_value),
+                    ),
+                    spacing="3",
+                    align="center",
                 ),
-                spacing="3",
+                width="100%",
+                justify="space-between",
                 align="center",
             ),
             spacing="3",
@@ -330,8 +349,9 @@ def main_table():
         rx.table.root(
             rx.table.header(
                 rx.table.row(
+                    _header_cell("Note ID", "scan-barcode"),
                     _header_cell("Title", "a-large-small"),
-                    _header_cell("Course ID", "scan-barcode"),
+                    _header_cell("Course ID", "hash"),
                     _header_cell("Date", "calendar"),
                     _header_cell("Delete", "trash-2")
                 ),

@@ -50,18 +50,8 @@ class State(rx.State):
     sort_reverse: bool = False
     search_value: str = ""
     current_note: Note = Note()
-    document_content: str = """# Links and Switches \n Links and switches have limited capacity → 
-    how do we share space? We typically **dynamically allocate based on demand**. This is based on 
-    the idea that the **peak of aggregate demand is often lower than the aggregate of peak demands**. 
-    This approach is much more efficient. Peaks still happen, causing delays or drops, but we tolerate 
-    it. Some firms like financial exchanges build their own statically-allocated networks to prevent 
-    any delays, and are less sensitive of the cost of doing so. \n ## How do we actually do this dynamic allocation, though? \n - Best effort: everyone sends and see what happens. \n - **Packet 
-    switching** does this by forwarding each packet it receives individually, without coordination \n - 
-    Reservations: users request bandwidth at start of flow, and release it at end. \n - **Circuit 
-    switching** does this by routing at the start and coordinating all routers along a path \n\n Notice 
-    both are still statistical multiplexing, just at different granularities. We can define burstiness 
-    ($\\frac{\\text{peak usage}}{\\text{{average usage}}}$) as one way to compare the two.
-    """
+    document_content: str = ""
+    selected_note: Note = Note()
     is_streaming: bool = False
     recording: bool = False
 
@@ -81,6 +71,8 @@ class State(rx.State):
         self.search_results = [f"{results[0]}"]
         self.show_dialog = True
 
+    def select_note(self, note):
+        self.selected_note = note
 
     def close_dialog(self):
         self.show_dialog = False
@@ -225,6 +217,8 @@ class State(rx.State):
 
         if not note:
             raise Exception("Note not found.")
+        
+        self.select_note(note)
         
         summary = self.summarize_transcript(transcript)
 
@@ -428,7 +422,6 @@ class State(rx.State):
             session.delete(note)
             session.commit()
         self.load_entries()
-        State.set_content("")
 
         if note_id:
             vector_db.delete(ids=[note_id])
@@ -449,7 +442,7 @@ class State(rx.State):
                   "content": NOTE_2_CONTENT, 
                   "date": datetime(now.year, now.month, 5), 
                   "course_id": "Networking 101"}
-        note_3 = {"name": "Cellular Technologies", 
+        note_3 = {"name": "Resource Sharing", 
                   "content": NOTE_3_CONTENT, 
                   "date": datetime(now.year, now.month, 11), 
                   "course_id": "Networking 101"}
