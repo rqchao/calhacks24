@@ -13,7 +13,7 @@ from deepgram import (
 from sqlmodel import select, asc, desc, or_, func, cast, String, Field
 from datetime import datetime, timedelta
 from .vectordb import create_chroma_db, add_to_chroma_db, get_relevant_files
-from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
+from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT, EXAMPLE_PROMPT, SYSTEM_PROMPT
 import os
 from groq import Groq
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
@@ -220,18 +220,12 @@ class State(rx.State):
         
         self.select_note(note)
         
-        # summary = self.summarize_transcript(transcript)
-
         note_with_locations = ""
         lines = [line for line in note.content.split('\n') if line.strip()]
         index = 0
         for line in lines:
             note_with_locations += line + '\n' + str(index) + '\n'
             index += 1
-
-        # print("summary: ", summary)
-
-        # print("old_content: ", note.content)
 
         location, rewritten_summary  = self.location_and_new_content(note_with_locations, transcript)
 
@@ -243,8 +237,6 @@ class State(rx.State):
             if index == location:
                 new_content += rewritten_summary + '\n' + '\n'
 
-        # print("new_content: ", new_content)
-
         with rx.session() as session:
             curr_note = session.exec(select(Note).where(Note.uuid == uuid)).first()
             curr_note.content = new_content
@@ -253,94 +245,37 @@ class State(rx.State):
 
         return rewritten_summary
 
-        # self.update_note_to_db(new_note)
-        
-        # use groq and chatgpt to summarize the important information in transcript. then, figure out which line of note we should add it to, then return the entire note with the new information added.
-
-    # def summarize_transcript(self, transcript: str) -> str:
-    #     messages = [
-    #         {
-    #             "role": "system", 
-    #             "content": "You are an assistant that summarizes a transcript"
-    #         },
-    #         {
-    #             "role": "user", 
-    #             "content": f"{transcript}"
-    #         }
-    #     ]
-        
-    #     chat_completion = client.chat.completions.create(
-    #         messages=messages,
-    #         model="llama3-70b-8192",
-    #     )
-
-    #     print("DEBUG", chat_completion.choices[0].message.content)
-
-    #     return chat_completion.choices[0].message.content
-    
     def location_and_new_content(self, note_with_locations: str, new_info: str) -> tuple:
         messages = [
             {
                 "role": "system", 
-                "content": (
-                    """You are an assistant that is given a note page for a class with a number between 
-                    each paragraph, and new information. Your task is to determine which 
-                    number is the most suitable location in the note page to add the new information. 
-                    Additionally, you must synthesize and rewrite the new information in Github-flavored markdown to fit 
-                    seamlessly into the note's existing content. Return both the number and the rewritten 
-                    new information in markdown, separated by a delimiter '###'. Pay attention to and include necessary 
-                    spacing, punctuation, and symbols for the Github-flavored markdown text."""
-                )
+                "content": SYSTEM_PROMPT
             },
             {
                 "role": "user", 
                 "content": (
-                    f"""
-                    Here's an example of the inputs and outputs, ensure your output conforms to the same format.
+                    f"""{EXAMPLE_PROMPT}
 
-                    INPUTS:
-                    Input 1: note page with locations
-                    ## Why is the Internet Interesting?
-                    0
-                    - **New problem**: Tying together different, existing networks
-                    1
-                    - **Challenges**:
-                    2
-                      - No formal model
-                    3
-                      - No measurable performance benchmark
-                    4
-                      - Must scale to **billions** of users
-                    5
-                      - Must align with business relationships
-                    6
-
-                    Input 2: new information
-                    Federation enables the tremendous scale of the Internet. Instead of a single operator managing billions of users and trillions of services, we only need to focus on interconnecting all the different operators. Federation also allows us to build the Internet out of a huge diversity of technologies (e.g. wireless, optical), with a huge range of capabilities (e.g. home links with tiny capacity, or undersea cables with huge capacity). These technologies are also constantly evolving, which means we can't aim for a fixed target (e.g. capacity and demand is constantly increasing by orders of magnitude). The massive scale of the Internet also means that any system we design has to support the massive range of users and applications on the Internet (e.g. some need more capacity than others, some may be malicious).
-
-                    EXPECTED OUTPUT (do NOT output this portion, just the below line):
-                    4###  - Support a massive range of users and applications
-
-                    Use the new information: {new_info}, and the existing note page with 
-                    locations: {note_with_locations} to form your output."""
+Use the new information: {new_info}, and the existing note page with 
+locations: {note_with_locations} to form your output."""
                 )
             },
         ]
         
         chat_completion = client.chat.completions.create(
             messages=messages,
-            model="llama3-70b-8192",
+            model="llama-3.1-70b-versatile",
         )
 
         output = chat_completion.choices[0].message.content
 
-        print("LLM_OUTPUT", output)
+        print(output)
 
-        if "###" not in output:
-            raise Exception("Output does not contain the expected delimiter '###'.")
+        if "===" not in output:
+            raise Exception("Output does not contain the expected delimiter '==='.")
 
         # Split the output into the location number and the rewritten summary
-        location, rewritten_summary = output.split("###", 1)
+        location, rewritten_summary = output.split("===", 1)
 
         # print(location)
 
@@ -348,26 +283,6 @@ class State(rx.State):
             raise Exception("The location part is not a valid number.")
 
         return int(location), rewritten_summary
-
-    
-    # def insert_summary_into_note(self, note_content: str, summary: str) -> str:
-    #     messages = [
-    #         {
-    #             "role": "system", 
-    #             "content": "You are an assistant that is given a note page for a class, and a summary of new information. Figure out where in the note page we should add it to, then return the entire note page with the new information added."
-    #         },
-    #         {
-    #             "role": "user", 
-    #             "content": f"Here's the new information {summary}, and here's the existing note page {note_content}"
-    #         }
-    #     ]
-        
-    #     chat_completion = client.chat.completions.create(
-    #         messages=messages,
-    #         model="llama3-70b-8192",
-    #     )
-
-    #     return chat_completion.choices[0].message.content
 
     def get_note_by_uuid(self, note_uuid: str) -> Optional[Note]:
         """Retrieve a note based on its UUID."""

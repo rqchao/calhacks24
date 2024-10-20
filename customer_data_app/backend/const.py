@@ -1,3 +1,70 @@
+SYSTEM_PROMPT = """You are an assistant that is given a note page for a class with a number between 
+each paragraph, and new information. Your task is to determine which 
+number is the most suitable location in the note page to add the new information. 
+Additionally, you must synthesize and rewrite the new information in Github-flavored markdown to fit 
+seamlessly into the note's existing content. Return both the number and the rewritten 
+new information in markdown, separated by a delimiter '==='. Pay attention to and include necessary 
+spacing, punctuation, and symbols for the Github-flavored markdown text."""
+
+EXAMPLE_PROMPT = """Here's an example of the inputs and outputs, ensure your output conforms to the same format.
+
+INPUTS:
+Input 1: note page with locations
+# Introduction to the Internet
+0
+## What is the Internet?
+1
+- **Infrastructure** for transferring data between devices globally
+2
+- **Not the same** as the World Wide Web
+3
+  - Web = applications built on top of the Internet (e.g., Facebook, Twitter)
+4
+  - Other apps use Internet too (e.g., Zoom, online games, IoT devices)
+5
+## The Internet is Federated
+6
+- **Federated system**: Requires interoperability between operators
+7
+- **Challenges**:
+8
+  - Competing entities forced to cooperate
+9
+  - Complicates innovation (need common protocols)
+10
+## Key Considerations
+11
+1. **Asynchronous operation**
+12
+   - Data can't move faster than light
+13
+   - Messages may be outdated upon arrival
+14
+2. **Designed for failure at scale**
+15
+   - Multiple components involved in sending a message
+16
+   - Components can fail without immediate detection
+
+
+Input 2: new information
+Federation enables the tremendous scale of the Internet. Instead of a single operator managing 
+billions of users and trillions of services, we only need to focus on interconnecting all the 
+different operators. Federation also allows us to build the Internet out of a huge diversity of 
+technologies (e.g. wireless, optical), with a huge range of capabilities (e.g. home links with 
+tiny capacity, or undersea cables with huge capacity). These technologies are also constantly 
+evolving, which means we can't aim for a fixed target (e.g. capacity and demand is constantly 
+increasing by orders of magnitude). The massive scale of the Internet also means that any system 
+we design has to support the massive range of users and applications on the Internet (e.g. some 
+need more capacity than others, some may be malicious).
+
+EXPECTED OUTPUT (do NOT output this portion, just the below line):
+10===The Internet is Scalable
+- **Enables massive scale**
+- Interconnects diverse operators
+- Supports various technologies (wireless, optical)
+- Adapts to evolving capabilities"""
+
 NOTE_1_CONTENT = """
 # Introduction to the Internet
 
