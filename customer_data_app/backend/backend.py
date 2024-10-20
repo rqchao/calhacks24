@@ -201,8 +201,6 @@ class State(rx.State):
 
         except Exception as e:
             print(f"Could not open socket: {e}")
-        finally:
-            return State.stop_recording()
             
     @rx.background
     async def stop_recording(self):
@@ -219,6 +217,7 @@ class State(rx.State):
             self.update_notes(transcript)
 
     def update_notes(self, transcript: str):
+        """Returns additional information added to note."""
         results = get_relevant_files(transcript, vector_db)
         uuid = results[0]
 
@@ -229,20 +228,36 @@ class State(rx.State):
         
         summary = self.summarize_transcript(transcript)
 
-        print("summary: ", summary)
+        note_with_locations = ""
+        lines = [line for line in note.content.split('\n') if line.strip()]
+        index = 0
+        for line in lines:
+            note_with_locations += line + '\n' + str(index) + '\n'
+            index += 1
 
-        print("old content: ", note.content)
+        # print("summary: ", summary)
 
-        new_content = self.insert_summary_into_note(note.content, summary)
+        # print("old_content: ", note.content)
 
-        print("new_content: ", new_content)
+        location, rewritten_summary  = self.location_and_new_content(note_with_locations, summary)
+
+        new_content = ""
+        index = 0
+        for line in lines:
+            new_content += line + '\n' + '\n'
+            index += 1
+            if index == location:
+                new_content += rewritten_summary + '\n' + '\n'
+
+        # print("new_content: ", new_content)
 
         with rx.session() as session:
             curr_note = session.exec(select(Note).where(Note.uuid == uuid)).first()
             curr_note.content = new_content
             session.add(curr_note)
             session.commit()
-        return note
+
+        return summary
 
         # self.update_note_to_db(new_note)
         
@@ -269,16 +284,47 @@ class State(rx.State):
 
         return chat_completion.choices[0].message.content
     
-    def insert_summary_into_note(self, note_content: str, summary: str) -> str:
+    def location_and_new_content(self, note_with_locations: str, summary: str) -> tuple:
         messages = [
             {
                 "role": "system", 
-                "content": "You are an assistant that is given a note page for a class, and a summary of new information. Figure out where in the note page we should add it to, then return the entire note page with the new information added."
+                "content": (
+                    """You are an assistant that is given a note page for a class with a number between 
+                    each paragraph, and a summary of new information. Your task is to determine which 
+                    number is the most suitable location in the note page to add the new information. 
+                    Additionally, you must rewrite the provided summary to fit seamlessly into the note's 
+                    existing content. Return both the number and the rewritten summary, separated by a 
+                    delimiter '###'."""
+                )
             },
             {
                 "role": "user", 
-                "content": f"Here's the new information {summary}, and here's the existing note page {note_content}"
-            }
+                "content": (
+                    f"""
+                    Here's an example of the inputs and outputs, ensure your output conforms to the same format.
+
+                    INPUTS:
+                    Input 1: note page with locations
+
+                    The introduction to cellular networks covers the basics of radio communication.
+                    0
+                    The role of base stations and antennas is crucial in cellular networks.
+                    1
+                    Wireless mobile connectivity faces various challenges due to mobility.
+                    2
+                    Infrastructure components such as routers and switches form the backbone.
+                    3
+
+                    Input 2: summary
+                    Cellular network design must also account for environmental factors that can affect signal strength.
+
+                    EXPECTED OUTPUT (do NOT output this portion, just the below line):
+                    2###In addition to challenges posed by mobility, cellular network design must also account for environmental factors that can affect signal strength. This ensures seamless communication across various environments.
+
+                    Use this summary: {summary}, and the existing note page with 
+                    locations: {note_with_locations} to form your output."""
+                )
+            },
         ]
         
         chat_completion = client.chat.completions.create(
@@ -286,7 +332,42 @@ class State(rx.State):
             model="llama3-70b-8192",
         )
 
-        return chat_completion.choices[0].message.content
+        output = chat_completion.choices[0].message.content.strip()
+
+        print("LLM_OUTPUT", output)
+
+        if "###" not in output:
+            raise Exception("Output does not contain the expected delimiter '###'.")
+
+        # Split the output into the location number and the rewritten summary
+        location, rewritten_summary = output.split("###", 1)
+
+        # print(location)
+
+        if not location.strip().isdigit():
+            raise Exception("The location part is not a valid number.")
+
+        return int(location.strip()), rewritten_summary.strip()
+
+    
+    # def insert_summary_into_note(self, note_content: str, summary: str) -> str:
+    #     messages = [
+    #         {
+    #             "role": "system", 
+    #             "content": "You are an assistant that is given a note page for a class, and a summary of new information. Figure out where in the note page we should add it to, then return the entire note page with the new information added."
+    #         },
+    #         {
+    #             "role": "user", 
+    #             "content": f"Here's the new information {summary}, and here's the existing note page {note_content}"
+    #         }
+    #     ]
+        
+    #     chat_completion = client.chat.completions.create(
+    #         messages=messages,
+    #         model="llama3-70b-8192",
+    #     )
+
+    #     return chat_completion.choices[0].message.content
 
     def get_note_by_uuid(self, note_uuid: str) -> Optional[Note]:
         """Retrieve a note based on its UUID."""
