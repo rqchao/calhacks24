@@ -36,14 +36,14 @@ def create_chroma_db(name: str):
 def create_text_summary(text: str) -> str:
     response = model.generate_content([TEXT_SUMMARY_PROMPT, text])
 
-    return response
+    return response.text
 
-def add_to_chroma_db(db: chromadb.Collection, note_content: str) -> None:
+def add_to_chroma_db(db: chromadb.Collection, note_content: str, random_id: str) -> None:
     summary = create_text_summary(note_content)
-    
+
     db.add(
-        documents=summary,
-        ids=str(uuid.uuid4())
+        documents=[summary],
+        ids=random_id
     )
 
 def get_relevant_files(query: str, db: chromadb.Collection):

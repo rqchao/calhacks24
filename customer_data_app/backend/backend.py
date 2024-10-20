@@ -1,12 +1,14 @@
+import uuid
 import reflex as rx
 from typing import Literal, Union
-from sqlmodel import select, asc, desc, or_, func, cast, String
+from sqlmodel import select, asc, desc, or_, func, cast, String, Field
 from datetime import datetime, timedelta
 from .vectordb import create_chroma_db, add_to_chroma_db
 from .const import NOTE_1_CONTENT, NOTE_2_CONTENT, NOTE_3_CONTENT
 
 #LiteralStatus = Literal["Delivered", "Pending", "Cancelled"]
 
+vector_db = create_chroma_db("Notes")
 
 class User(rx.Model, table=True):
     """The user model."""
@@ -18,7 +20,7 @@ class User(rx.Model, table=True):
 
 class Note(rx.Model, table=True):
     """The note model."""
-
+    uuid: str = Field(primary_key=True)
     name: str
     content: str # is there a way to represent like latex here or smth
     date: str
@@ -33,7 +35,6 @@ class State(rx.State):
     sort_reverse: bool = False
     search_value: str = ""
     current_note: Note = Note()
-    # vector_db: any = None
     document_content: str = """# Links and Switches \n Links and switches have limited capacity → 
     how do we share space? We typically **dynamically allocate based on demand**. This is based on 
     the idea that the **peak of aggregate demand is often lower than the aggregate of peak demands**. 
@@ -111,43 +112,6 @@ class State(rx.State):
             
             self.notes = session.exec(query).all()
 
-        # Remove these lines as they are specific to Customer and not relevant for Note
-        # self.get_current_month_values()
-        # self.get_previous_month_values()
-
-
-    # def get_current_month_values(self):
-    #     """Calculate current month's values."""
-    #     now = datetime.now()
-    #     start_of_month = datetime(now.year, now.month, 1)
-        
-    #     current_month_users = [
-    #         user for user in self.users if datetime.strptime(user.date, '%Y-%m-%d %H:%M:%S') >= start_of_month
-    #     ]
-    #     num_customers = len(current_month_users)
-    #     total_payments = sum(user.payments for user in current_month_users)
-    #     num_delivers = len([user for user in current_month_users if user.status == "Delivered"])
-    #     self.current_month_values = MonthValues(num_customers=num_customers, total_payments=total_payments, num_delivers=num_delivers)
-
-
-    # def get_previous_month_values(self):
-    #     """Calculate previous month's values."""
-    #     now = datetime.now()
-    #     first_day_of_current_month = datetime(now.year, now.month, 1)
-    #     last_day_of_last_month = first_day_of_current_month - timedelta(days=1)
-    #     start_of_last_month = datetime(last_day_of_last_month.year, last_day_of_last_month.month, 1)
-        
-    #     previous_month_users = [
-    #         user for user in self.users
-    #         if start_of_last_month <= datetime.strptime(user.date, '%Y-%m-%d %H:%M:%S') <= last_day_of_last_month
-    #     ]
-    #     # We add some dummy values to simulate growth/decline. Remove them in production.
-    #     num_customers = len(previous_month_users) + 3
-    #     total_payments = sum(user.payments for user in previous_month_users) + 240
-    #     num_delivers = len([user for user in previous_month_users if user.status == "Delivered"]) + 5
-        
-    #     self.previous_month_values = MonthValues(num_customers=num_customers, total_payments=total_payments, num_delivers=num_delivers)
-
 
     def sort_values(self, sort_value: str):
         self.sort_value = sort_value
@@ -162,43 +126,37 @@ class State(rx.State):
         self.search_value = search_value
         self.load_entries()
     
-    def add_notes(self, form_data: dict):
-        self.current_note = form_data
-        self.current_note["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        with rx.session() as session:
-            if session.exec(
-                select(Note).where(Note.name == self.current_note["name"])
-            ).first():
-                return rx.window_alert("Note with this name already exists")
-            session.add(Note(**self.current_note))
-            session.commit()
-        self.load_entries()
-
-        # add_to_chroma_db(vector_db, self.current_note["content"])
-
-        return rx.toast.info(f"Note {self.current_note['name']} has been added.", position="bottom-right")
-
     def add_note_to_db(self, form_data: dict):
+        random_id = str(uuid.uuid4())
+
         self.current_note = form_data
         self.current_note["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.current_note["uuid"] = random_id
 
         with rx.session() as session:
             if session.exec(
                 select(Note).where(Note.name == self.current_note["name"])
             ).first():
                 return rx.window_alert("Note with this name already exists")
-            session.add(Note(**self.current_note))
+            note = Note(**self.current_note)
+            # print(note.uuid)
+            session.add(note)
             session.commit()
         self.load_entries()
+
+        add_to_chroma_db(vector_db, self.current_note["content"], random_id)
+
+        print(vector_db.count())
+
+        # Create link between randomized chroma db and postgres id
+
         return rx.toast.info(f"Note {self.current_note['name']} has been added.", position="bottom-right")
     
-
     def update_note_to_db(self, form_data: dict):
         self.current_note.update(form_data)
         with rx.session() as session:
             note = session.exec(
-                select(Note).where(Note.id == self.current_note["id"])
+                select(Note).where(Note.id == self.current_note["id"]) # Might need to be uuid now
             ).first()
             for field in Note.get_fields():
                 if field != "id":
@@ -211,12 +169,20 @@ class State(rx.State):
 
     def delete_note(self, name: str):
         """Delete a note from the database."""
+
+        note_id = None
+
         with rx.session() as session:
             note = session.exec(select(Note).where(Note.name == name)).first()
+            note_id = note.uuid
             session.delete(note)
             session.commit()
         self.load_entries()
         State.set_content("")
+
+        if note_id:
+            vector_db.delete(ids=[note_id])
+
         return rx.toast.info(f"Note {note.name} has been deleted.", position="bottom-right")
     # @rx.var
     # def payments_change(self) -> float:
@@ -242,6 +208,6 @@ class State(rx.State):
         self.add_notes(note_2)
         self.add_notes(note_3)
 
-        add_to_chroma_db(self.vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
-        add_to_chroma_db(self.vector_db, "Router Hardware" + NOTE_2_CONTENT)
-        add_to_chroma_db(self.vector_db, "Cellular Technologies" + NOTE_3_CONTENT)
+        add_to_chroma_db(vector_db, "Introduction to the Internet" + NOTE_1_CONTENT)
+        add_to_chroma_db(vector_db, "Router Hardware" + NOTE_2_CONTENT)
+        add_to_chroma_db(vector_db, "Cellular Technologies" + NOTE_3_CONTENT)
