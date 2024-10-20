@@ -52,6 +52,20 @@ class State(rx.State):
     # def __init__(self):
     #     super().__init__()
         # self.vector_db = create_chroma_db("Notes")
+    # semantic search for test
+    search_query: str = ""
+    search_results: list[str] = []
+    show_dialog: bool = False
+
+
+
+    def perform_search(self):
+        # Simulating a search function. Replace this with your actual search logic.
+        self.search_results = [f"Result {i} for '{self.search_query}'" for i in range(1, 6)]
+        self.show_dialog = True
+
+    def close_dialog(self):
+        self.show_dialog = False
 
     def start_streaming(self, _ev=None):
         self.is_streaming = True

@@ -1,28 +1,6 @@
 import reflex as rx
 from ..backend.backend import State, Note
-from ..components.form_field import form_field
-
-# def _format_date_string(date_string: str) -> str:
-#     try:
-#         date_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
-#         day = date_obj.day
-#         if 4 <= day <= 20 or 24 <= day <= 30:
-#             suffix = "th"
-#         else:
-#             suffix = ["st", "nd", "rd"][day % 10 - 1]
-#         return date_obj.strftime(f'%B {day}{suffix}, %Y')
-#     except ValueError:
-#         return date_string
-
-# class DateFormatter(rx.Component):
-#     date: rx.Var[str]
-
-#     def render(self):
-#         return rx.cond(
-#             self.date != "",
-#             rx.text(_format_date_string(self.date)),
-#             rx.text("No date available")
-#         )
+from ..components.form_field import form_field, form_field_textarea
 
 def show_notes(note: Note):
     """Show a customer in a table row."""
@@ -54,6 +32,27 @@ def show_notes(note: Note):
         on_click=State.set_content(note.content),
         cursor="pointer",
         align="center",
+    )
+
+
+def push_test_data():
+    return rx.el.button(
+        "Push Data",
+        background_color="#4F46E5",
+        transition_duration="300ms",
+        font_weight="500",
+        _hover={"background-color": "#4338CA"},
+        padding_left="1rem",
+        padding_right="1rem",
+        padding_top="0.5rem",
+        padding_bottom="0.5rem",
+        border_radius="9999px",
+        font_size="0.875rem",
+        line_height="1.25rem",
+        color="#ffffff",
+        on_click=State.create_sample_notes,
+        transition_property="background-color, border-color, color, fill, stroke, opacity, box-shadow, transform",
+        transition_timing_function="cubic-bezier(0.4, 0, 0.2, 1)",
     )
 
 
@@ -114,13 +113,11 @@ def add_document_button() -> rx.Component:
                             "scan-barcode",
                         ),
                         # Note Content
-                        form_field(
-                            "Note Content",
-                            "Content",
-                            "text",
-                            "content",
-                            "notepad-text",
-
+                        form_field_textarea(
+                            label="Note Content",
+                            placeholder="Content",
+                            name="content",
+                            icon="notepad-text",
                         ),
                         # Status
                         # rx.vstack(
@@ -260,11 +257,55 @@ def _header_cell(text: str, icon: str):
     )
 
 
+def test_chroma_query():
+    return rx.box(
+        rx.input(
+            placeholder="Debug semantic...",
+            type="text",
+            value=State.search_query,
+            on_change=State.set_search_query,
+            # on_key_down=lambda key: State.perform_search() if key == "Enter" else None,
+            on_blur = State.perform_search(),
+            padding_left="1.5rem",
+        ),
+        rx.icon(
+            tag="search",
+            position="absolute",
+            height="1rem",
+            left="0.75rem",
+            color="#9CA3AF",
+            top="0.5rem",
+            width="1rem",
+        ),
+        rx.dialog.root(
+            rx.dialog.trigger(rx.button("Search")),
+            rx.dialog.content(
+                rx.dialog.title("Search Results"),
+                rx.dialog.description(
+                    # State.search_results,
+                    rx.unordered_list(
+                        rx.foreach(
+                            State.search_results,
+                            lambda result: rx.list_item(result)
+                        )
+                    )
+                ),
+                rx.dialog.close(
+                    rx.button("Close", on_click=State.close_dialog)
+                ),
+                open=State.show_dialog,
+            ),
+        ),
+        position="relative",
+        width="100%",
+    )
+
 def main_table():
     return rx.fragment(
         rx.flex(
             add_document_button(),
-            # create_new_note_button(),
+            push_test_data(),
+            test_chroma_query(),
             rx.spacer(),
             rx.hstack(
                 rx.cond(

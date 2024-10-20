@@ -14,7 +14,9 @@ def form_field(
             ),
             rx.form.control(
                 rx.input(
-                    placeholder=placeholder, type=type, default_value=default_value
+                    placeholder=placeholder, 
+                    type=type,
+                    default_value=default_value
                 ),
                 as_child=True,
             ),
@@ -23,4 +25,25 @@ def form_field(
         ),
         name=name,
         width="100%",
+    )
+
+def form_field_textarea(
+    label: str, placeholder: str, name: str, icon: str, default_value: str = ""
+) -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.icon(icon, size=16, stroke_width=1.5),
+            rx.text(label),
+            align="center",
+            spacing="2",
+        ),
+        rx.text_area(
+            placeholder=placeholder,
+            default_value=default_value,
+            name=name,
+            width="100%",
+        ),
+        align_items="flex_start",
+        width="100%",
+        spacing="1",
     )
